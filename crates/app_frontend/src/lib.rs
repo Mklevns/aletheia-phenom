@@ -3,8 +3,11 @@ use sim_engine::gol::GameOfLife; // Specific imports
 use sim_engine::ode::ODESim;
 use sim_engine::Simulation; // Import the trait
 
-/// The global application root.
-/// This defines a top-level signal containing a boxed simulation.
+// --- NEW MODULE REGISTRATION ---
+mod components;
+
+use crate::components::simulation_viewport::SimulationViewport;
+
 #[component]
 pub fn App() -> impl IntoView {
     // A writable signal that holds our active simulation.
@@ -42,27 +45,9 @@ pub fn App() -> impl IntoView {
                 </button>
             </div>
 
+            // --- THIS IS THE UPDATED PART ---
             <hr/>
-
-            // We will replace this debug output with the <SimulationViewport/>
-            <Show
-                when=move || active_sim.get().is_some()
-                fallback=|| view! { <p>"No simulation loaded yet."</p> }
-            >
-                {move || {
-                    let sim_is_loaded = active_sim.get().is_some();
-                    if sim_is_loaded {
-                        view! {
-                            <p style="color: #00ff00; font-style: italic;">
-                                "Simulation loaded."
-                            </p>
-                        }
-                        .into_view()
-                    } else {
-                         view! { <p>"No simulation loaded yet."</p> }.into_view()
-                    }
-                }}
-            </Show>
+            <SimulationViewport active_sim=active_sim />
         </main>
     }
 }
