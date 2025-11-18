@@ -1,0 +1,12 @@
+[package]
+name = "sim_engine"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+ready = { version = "0.5", features = ["serde"] }
+serde = { version = "1.0", features = ["derive"] }
+getrandom = { version = "0.2", features = ["js"] } # For WASM compatibility
+
+# We'll add these later for the ODE module
+# diffeq-rs = "0.2"
