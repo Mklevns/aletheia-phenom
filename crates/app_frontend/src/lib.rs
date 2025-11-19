@@ -1,6 +1,7 @@
 use leptos::*;
 use sim_engine::gol::GameOfLife;
 use sim_engine::ode::ODESim;
+use sim_engine::gray_scott::GrayScott;
 // UPDATED IMPORTS: Added create_brain and BrainType
 use inference_engine::{DiscoveryEvent, create_brain, BrainType};
 
@@ -52,7 +53,20 @@ pub fn App() -> impl IntoView {
             is_playing.set(true);
         }
     };
-
+    
+    let load_gs = {
+        let active_session = active_session.clone();
+        move |_| {
+            let sim = Box::new(GrayScott::init(100, 100));
+            // Use the Gardener agent (it likes to water/feed things)
+            let agent = create_brain(BrainType::Gardener); 
+            active_session.set(Some(Session::new(sim, agent)));
+            set_sim_type.set("gs");
+            tick_count.set(0);
+            is_playing.set(true);
+        }
+    };
+    
     // --- Handlers ---
     let on_reset = move |_| {
         match current_sim_type.get() {
