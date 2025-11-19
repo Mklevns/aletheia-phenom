@@ -1,4 +1,4 @@
-use sim_engine::{Simulation, Experimentable, SimState, Action, Observation, ParamValue};
+use sim_engine::{Simulation, Experimentable, SimState, Action, Observation};
 use inference_engine::{Experimenter, AgentAction, AgentObservation, DiscoveryEvent};
 
 /// A Session holds the World (Simulation) and the Scientist (Experimenter).
