@@ -139,3 +139,31 @@ fn draw_points(ctx: &CanvasRenderingContext2d, w: f64, h: f64, points: &Vec<(f64
         ctx.fill_rect(((x - min_x)/sx)*w, ((y - min_y)/sy)*h, 1.5, 1.5);
     }
 }
+fn draw_heatmap(ctx: &CanvasRenderingContext2d, w: f64, h: f64, gw: u32, gh: u32, values: &Vec<f64>) {
+    if gw == 0 || gh == 0 { return; }
+    
+    // Optimization: Drawing thousands of rects is slow. 
+    // In a production app, we would use ImageData (putImageData). 
+    // For this MVP, we scale up pixels (blocks) to keep FPS high.
+    let block_w = w / gw as f64;
+    let block_h = h / gh as f64;
+
+    for (i, &v) in values.iter().enumerate() {
+        if v > 0.01 {
+            let x = (i % gw as usize) as f64;
+            let y = (i / gw as usize) as f64;
+            
+            // Color Map: Blue -> Cyan -> White
+            // v ranges 0.0 to ~1.0
+            let blue = (v * 255.0) as u8;
+            let green = (v * 200.0) as u8;
+            let val = (v * 100.0).min(100.0) as u8;
+            
+            let color = format!("rgb(0, {}, {})", green, blue);
+            ctx.set_fill_style(&color.into());
+            
+            // Fill with slight overlap to avoid grid lines
+            ctx.fill_rect(x * block_w, y * block_h, block_w + 0.5, block_h + 0.5);
+        }
+    }
+}
