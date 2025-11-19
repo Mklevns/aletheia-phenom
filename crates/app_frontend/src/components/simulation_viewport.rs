@@ -1,93 +1,37 @@
 use leptos::*;
-use sim_engine::{SimState, Simulation, Experimentable, Action, Observation};
-use inference_engine::{MockExperimenter, Experimenter, AgentAction, AgentObservation, DiscoveryEvent};
-use wasm_bindgen::JsCast;
+use crate::session::Session; 
+// Note: You'll need to change the active_sim signal in App to hold a Session
 use web_sys::{CanvasRenderingContext2d, HtmlCanvasElement};
-
-// Bridge types
-fn map_obs(obs: Observation) -> AgentObservation {
-    match obs {
-        Observation::GridSummary { width, height, .. } => AgentObservation::GridSummary { width, height },
-        Observation::StateVec(v) => AgentObservation::StateVec(v),
-        _ => AgentObservation::None,
-    }
-}
-
-fn map_act(act: AgentAction) -> Action {
-    match act {
-        AgentAction::FlipCell { r, c } => Action::FlipCell { r, c },
-        AgentAction::Perturb { which, delta } => Action::Perturb { which, delta },
-        AgentAction::Noop => Action::Noop,
-    }
-}
+use wasm_bindgen::JsCast;
+use inference_engine::DiscoveryEvent;
 
 #[component]
 pub fn SimulationViewport(
-    active_sim: RwSignal<Option<Box<dyn Simulation>>>,
+    // Changed from Box<dyn Simulation> to the unified Session
+    active_session: RwSignal<Option<Session>>,
+    // We need a way to bubble up events to the feed
+    on_discovery: Callback<DiscoveryEvent>, 
 ) -> impl IntoView {
     let canvas_ref = create_node_ref::<HtmlCanvasElement>();
-    
-    // To do this properly in Leptos without a stored agent:
-    // We will just run the "Mock Logic" directly here for the demo.
 
     request_animation_frame_loop(move || {
-        if active_sim.get_untracked().is_some() {
-            active_sim.update(|sim_opt| {
-                if let Some(sim) = sim_opt.as_mut() {
-                    // 1. RL LOOP
-                    // Check if sim supports experiments
-                    if let Some(exp) = sim.as_experimentable() {
-                        let obs = exp.observe();
-                        let agent_obs = map_obs(obs);
-                        
-                        // Simple inline Agent logic (The "MockExperimenter")
-                        // (In real app, call agent.act())
-                        let action = match agent_obs {
-                            AgentObservation::GridSummary { width, height } => {
-                                // Randomly flip center
-                                if js_sys::Math::random() < 0.05 {
-                                     AgentAction::FlipCell { r: height/2, c: width/2 }
-                                } else { AgentAction::Noop }
-                            },
-                            AgentObservation::StateVec(_) => {
-                                // Kick chaos
-                                if js_sys::Math::random() < 0.02 {
-                                    AgentAction::Perturb { which: 0, delta: 1.5 }
-                                } else { AgentAction::Noop }
-                            },
-                            _ => AgentAction::Noop
-                        };
-
-                        let sim_act = map_act(action);
-                        exp.apply_action(sim_act);
-                    }
-
-                    // 2. Step
-                    sim.step();
-                }
-            });
-
-            // 3. Draw
-            if let Some(canvas) = canvas_ref.get_untracked() {
-                if let Some(sim) = active_sim.get_untracked() {
-                    if let Ok(Some(ctx_val)) = canvas.get_context("2d") {
-                        if let Ok(ctx) = ctx_val.dyn_into::<CanvasRenderingContext2d>() {
-                            draw_simulation(&ctx, &canvas, sim.get_state());
-                        }
-                    }
-                }
+        // 1. Update Logic
+        if let Some(session) = active_session.get_untracked().as_mut() {
+            // Run one tick of the Universe + Scientist
+            if let Some(event) = session.tick() {
+                on_discovery.call(event);
             }
-        } else {
-             // clear canvas
-             if let Some(canvas) = canvas_ref.get_untracked() {
+            
+            // 2. Render Logic
+            if let Some(canvas) = canvas_ref.get_untracked() {
                  if let Ok(Some(ctx_val)) = canvas.get_context("2d") {
-                        if let Ok(ctx) = ctx_val.dyn_into::<CanvasRenderingContext2d>() {
-                            let w = canvas.width() as f64;
-                            let h = canvas.height() as f64;
-                            ctx.set_fill_style(&"#000".into());
-                            ctx.fill_rect(0.0, 0.0, w, h);
-                        }
+                    if let Ok(ctx) = ctx_val.dyn_into::<CanvasRenderingContext2d>() {
+                        // (Assume draw_simulation is defined as before)
+                        crate::components::simulation_viewport::draw_simulation(
+                            &ctx, &canvas, session.get_state()
+                        );
                     }
+                }
             }
         }
     });
@@ -97,11 +41,12 @@ pub fn SimulationViewport(
             node_ref=canvas_ref
             width="800"
             height="600"
-            style="border: 1px solid #444; background: black; display: block; margin: 2rem auto; width: 80%; max-width: 800px;"
+            style="border: 1px solid #444; background: black; display: block; margin: 2rem auto;"
         />
     }
 }
 
+// ... keep existing draw_simulation / draw_grid / draw_points functions ...
 // ... draw functions (same as before) ...
 fn draw_simulation(ctx: &CanvasRenderingContext2d, canvas: &HtmlCanvasElement, state: SimState) {
     let w = canvas.width() as f64;
