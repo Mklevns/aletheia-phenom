@@ -18,21 +18,21 @@ impl Session {
     pub fn tick(&mut self) -> Option<DiscoveryEvent> {
         let mut discovery = None;
 
-        // 1. Allow Agent to Observe and Act (if Sim is experimentable)
         if let Some(exp_sim) = self.sim.as_experimentable() {
             let obs = exp_sim.observe();
             let agent_obs = self.map_obs(obs);
+            
+            // --- THE FEEDBACK LOOP ---
+            let reward = exp_sim.reward(); // (The "Order" signal)
 
-            // The Scientist thinks...
-            let (agent_action, event) = self.agent.act(&agent_obs, self.step_count);
+            // The Scientist thinks... (Applying the Novelty Multiplier internally)
+            let (agent_action, event) = self.agent.act(&agent_obs, reward, self.step_count);
             discovery = event;
 
-            // Apply the Scientist's will
             let sim_action = self.map_act(agent_action);
             exp_sim.apply_action(sim_action);
         }
 
-        // 2. Advance Physics
         self.sim.step();
         self.step_count += 1;
 
