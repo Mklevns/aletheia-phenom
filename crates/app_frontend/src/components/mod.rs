@@ -4,3 +4,4 @@
 
 pub mod simulation_viewport;
 pub mod discovery_feed;
+pub mod control_bar;
