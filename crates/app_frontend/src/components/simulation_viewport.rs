@@ -110,6 +110,8 @@ fn draw_simulation(ctx: &CanvasRenderingContext2d, canvas: &HtmlCanvasElement, s
     match state {
         SimState::Grid { width, height, cells, .. } => draw_grid(ctx, w, h, width, height, &cells),
         SimState::Points(points) => draw_points(ctx, w, h, &points),
+        // NEW: Draw the Chemical Soup
+        SimState::FloatGrid { width, height, values } => draw_heatmap(ctx, w, h, width, height, &values),
     }
 }
 fn draw_grid(ctx: &CanvasRenderingContext2d, w: f64, h: f64, gw: u32, gh: u32, cells: &Vec<bool>) {
