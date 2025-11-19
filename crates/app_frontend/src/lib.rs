@@ -1,7 +1,8 @@
 use leptos::*;
 use sim_engine::gol::GameOfLife;
 use sim_engine::ode::ODESim;
-use inference_engine::{DiscoveryEvent, MockExperimenter};
+// UPDATED IMPORTS: Added create_brain and BrainType
+use inference_engine::{DiscoveryEvent, create_brain, BrainType};
 
 mod components;
 pub mod session;
@@ -30,7 +31,8 @@ pub fn App() -> impl IntoView {
         let active_session = active_session.clone();
         move |_| {
             let sim = Box::new(GameOfLife::new());
-            let agent = Box::new(MockExperimenter::new()); 
+            // UPDATED: Now uses the Gardener Brain
+            let agent = create_brain(BrainType::Gardener); 
             active_session.set(Some(Session::new(sim, agent)));
             set_sim_type.set("gol");
             tick_count.set(0);
@@ -42,7 +44,7 @@ pub fn App() -> impl IntoView {
         let active_session = active_session.clone();
         move |_| {
             let sim = Box::new(ODESim::new());
-            // Connect the "Curious Scientist" brain
+            // UPDATED: Now uses the Q-Learning Brain
             let agent = create_brain(BrainType::QLearner); 
             active_session.set(Some(Session::new(sim, agent)));
             set_sim_type.set("ode");
