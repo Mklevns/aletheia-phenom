@@ -109,8 +109,13 @@ impl Experimentable for ODESim {
     }
 
     fn reward(&self) -> f64 {
-        // Reward distance from origin (energy)
-        (self.state[0].powi(2) + self.state[1].powi(2) + self.state[2].powi(2)).sqrt()
+        // Calculate "Energy" (Chaos/Distance from origin)
+        let energy = (self.state[0].powi(2) + self.state[1].powi(2) + self.state[2].powi(2)).sqrt();
+        
+        // We want to reward ORDER (Low Energy).
+        // If energy is 0, reward is 10.0. If energy is high (chaos), reward drops.
+        // We clamp it so it doesn't go negative.
+        (20.0 - energy).max(0.0)
     }
 }
 
