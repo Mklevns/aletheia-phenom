@@ -30,7 +30,7 @@ impl Simulation for GameOfLife {
         let mut universe = Universe::new();
         let root = Self::default_pattern();
         universe.set_root(root);
-        // ... existing pattern setup ...
+        
         let mut pattern_library = HashMap::new();
         pattern_library.insert("glider".into(), CellPattern::glider().id());
 
@@ -51,7 +51,6 @@ impl Simulation for GameOfLife {
     }
 
     fn get_state(&self) -> SimState {
-        // ... existing logic ...
         let macro_width = self.view_width_cells.next_power_of_two() as i64;
         let macro_height = self.view_height_cells.next_power_of_two() as i64;
 
@@ -78,7 +77,18 @@ impl Simulation for GameOfLife {
     }
 
     fn set_param(&mut self, key: &str, value: ParamValue) {
-        // ... existing logic ...
+        match (key, value) {
+            ("inject_pattern", ParamValue::String(name)) => {
+                if let Some(&pattern_id) = self.pattern_library.get(&name) {
+                    let centered = pattern_id.at(
+                        self.view_offset_x + self.view_width_cells as i64 / 2,
+                        self.view_offset_y + self.view_height_cells as i64 / 2,
+                    );
+                    self.universe.set_root(centered);
+                }
+            }
+            _ => {}
+        }
     }
     
     // Hook up the interface
