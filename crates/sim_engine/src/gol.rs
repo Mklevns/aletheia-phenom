@@ -99,17 +99,24 @@ impl Simulation for GameOfLife {
 
 // --- RL Implementation ---
 impl Experimentable for GameOfLife {
-    fn apply_action(&mut self, action: Action) {
-        match action {
-            Action::FlipCell { r, c } => {
-                // Map viewport r,c to world coordinates
-                let world_x = self.view_offset_x + c as i64;
-                let world_y = self.view_offset_y + r as i64;
-                self.universe.set_cell(world_x, world_y, true); // For simplicity, we just birth cells
-            }
-            _ => {}
+    // Inside impl Experimentable for GameOfLife
+fn apply_action(&mut self, action: Action) {
+    match action {
+        Action::FlipCell { r, c } => {
+            let world_x = self.view_offset_x + c as i64;
+            let world_y = self.view_offset_y + r as i64;
+            self.universe.set_cell(world_x, world_y, true);
         }
+        // Example: AI could reset the universe to empty
+        Action::SetParam { name, value } => {
+            if name == "clear" && value > 0.5 {
+                 // Implementation of clear would go here, 
+                 // or changing view offsets if you want the AI to move the camera.
+            }
+        }
+        _ => {}
     }
+}
 
     fn observe(&self) -> Observation {
         // Return alive count estimate (very rough for hashlife, but usable)
