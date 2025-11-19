@@ -54,8 +54,8 @@ impl Simulation for ODESim {
         SimState::Points(self.tail.clone())
     }
 
-    fn set_param(&mut self, name: &str, value: ParamValue) {
-        // ... existing param logic skipped for brevity, keep if present or use empty stub ...
+    fn set_param(&mut self, _name: &str, _value: ParamValue) {
+        // Standard UI parameter setting (optional stub)
     }
     
     fn as_experimentable(&mut self) -> Option<&mut dyn Experimentable> {
@@ -85,14 +85,29 @@ impl ODESim {
 
 // --- RL Implementation ---
 impl Experimentable for ODESim {
+    // MERGED ACTION HANDLER
     fn apply_action(&mut self, action: Action) {
-        if let Action::Perturb { which, delta } = action {
-            if which < 3 { self.state[which as usize] += delta; }
+        match action {
+            Action::Perturb { which, delta } => {
+                if which < 3 { self.state[which as usize] += delta; }
+            }
+            // --- NEW: Allow AI to tune constants ---
+            Action::SetParam { name, value } => {
+                match name.as_str() {
+                    "sigma" => self.params.sigma = value,
+                    "rho"   => self.params.rho   = value,
+                    "beta"  => self.params.beta  = value,
+                    _ => {}
+                }
+            }
+            _ => {}
         }
     }
+
     fn observe(&self) -> Observation {
         Observation::StateVec(self.state)
     }
+
     fn reward(&self) -> f64 {
         // Reward distance from origin (energy)
         (self.state[0].powi(2) + self.state[1].powi(2) + self.state[2].powi(2)).sqrt()
