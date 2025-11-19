@@ -90,8 +90,9 @@ pub fn App() -> impl IntoView {
                     <div style="padding: 1rem; border-bottom: 1px solid #444;">
                         <h1 style="margin: 0 0 1rem 0; font-size: 1.5rem; color: #00aaff;">"Aletheia-Phenom"</h1>
                         <div>
-                            <button on:click=load_gol>"Load Game of Life"</button>
-                            <button on:click=load_lorenz>"Load Lorenz"</button>
+                            <button on:click=load_gol>"Game of Life"</button>
+                            <button on:click=load_lorenz>"Lorenz"</button>
+                            <button on:click=load_gs style="background-color: #8800ff;">"Gray-Scott"</button>
                         </div>
                     </div>
 
