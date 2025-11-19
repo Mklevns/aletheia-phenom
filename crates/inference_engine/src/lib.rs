@@ -39,48 +39,56 @@ pub trait Experimenter {
 }
 
 // ---------------------------------------------------------
-// INTELLIGENCE: Curious Q-Learning Agent
+// INTELLIGENCE: Curious Q-Learning Agent (v2: Predictive)
 // ---------------------------------------------------------
 pub struct QLearningAgent {
     // Q-Table: Maps "StateHash" -> {Action: Value}
     q_table: HashMap<String, HashMap<DiscreteAction, f64>>,
     
-    // Novelty Memory: Maps "StateHash" -> Visit Count
-    visit_counts: HashMap<String, u64>,
+    // NEW: World Model (Physics Engine in the Brain)
+    // Maps (StateHash, Action) -> Predicted Next Continuous State [x, y, z]
+    world_model: HashMap<(String, DiscreteAction), [f64; 3]>,
 
     last_action: DiscreteAction,
     last_state_key: String,
+    last_state_vec: [f64; 3], // Keep track of exact physics state
     
     // Hyperparameters
-    epsilon: f64, // Curiosity (Randomness)
-    alpha: f64,   // Learning Rate
-    gamma: f64,   // Discount Factor
+    epsilon: f64, 
+    alpha: f64,   
+    gamma: f64,   
 }
 
 impl QLearningAgent {
     pub fn new() -> Self {
         Self {
             q_table: HashMap::new(),
-            visit_counts: HashMap::new(),
+            world_model: HashMap::new(),
             last_action: DiscreteAction::Noop,
             last_state_key: "0_0_0".to_string(),
+            last_state_vec: [0.0, 0.0, 0.0],
             epsilon: 0.5, 
             alpha: 0.1,
             gamma: 0.9,
         }
     }
 
-    // Quantize the continuous world into "Concepts" the AI can understand
+    // CHANGE #3: Foveated Vision (Logarithmic Discretization)
+    // High resolution near 0, low resolution far away.
     fn discretize(&self, state: [f64; 3]) -> String {
-        // Round to nearest 5.0 to create "regions" of space
-        let x = (state[0] / 5.0).round() as i32;
-        let y = (state[1] / 5.0).round() as i32;
-        let z = (state[2] / 5.0).round() as i32;
-        format!("{}_{}_{}", x, y, z)
+        let foveate = |v: f64| -> i32 {
+            // log(1 + |x|) compresses huge distances.
+            // Scale factor 4.0 gives us buckets like: 0..0.25, 0.25..0.6, etc.
+            let sign = v.signum();
+            let val = (v.abs() + 1.0).ln(); 
+            (sign * val * 4.0) as i32
+        };
+
+        format!("{}_{}_{}", foveate(state[0]), foveate(state[1]), foveate(state[2]))
     }
 
     fn map_action(&self, action: DiscreteAction) -> AgentAction {
-        let kick = 5.0; // Strong kick to allow pattern creation
+        let kick = 5.0; 
         match action {
             DiscreteAction::Noop => AgentAction::Noop,
             DiscreteAction::KickXPos => AgentAction::Perturb { which: 0, delta: kick },
@@ -96,8 +104,13 @@ impl QLearningAgent {
         if let Some(actions) = self.q_table.get(state_key) {
             actions.values().cloned().fold(f64::NEG_INFINITY, f64::max)
         } else {
-            0.0 // Optimistic initialization could go here
+            0.0 
         }
+    }
+
+    // Calculate Euclidean distance between two 3D points
+    fn dist(&self, a: [f64; 3], b: [f64; 3]) -> f64 {
+        ((a[0]-b[0]).powi(2) + (a[1]-b[1]).powi(2) + (a[2]-b[2]).powi(2)).sqrt()
     }
 }
 
@@ -105,33 +118,51 @@ impl Experimenter for QLearningAgent {
     fn act(&mut self, obs: &AgentObservation, base_reward: f64, step: u64) -> (AgentAction, Option<DiscoveryEvent>) {
         let mut discovery = None;
 
-        if let AgentObservation::StateVec(state) = obs {
-            // 1. OBSERVE & MEMORIZE
-            let current_state_key = self.discretize(*state);
+        if let AgentObservation::StateVec(current_state) = obs {
+            // 1. OBSERVE
+            let current_state_key = self.discretize(*current_state);
             
-            // 2. CALCULATE NOVELTY (The "Multiplier")
-            let visit_count = self.visit_counts.entry(current_state_key.clone()).or_insert(0);
-            *visit_count += 1;
+            // 2. CHANGE #1: CALCULATE SURPRISE (Prediction Error)
+            // Did the world behave how we thought it would given our last action?
+            let mut surprise = 0.0;
+            let prediction_key = (self.last_state_key.clone(), self.last_action);
             
-            // Novelty Bonus: High for new states, decays as we see them more
-            // Multiplier = 1 + (10 / count)
-            let novelty_multiplier = 1.0 + (10.0 / (*visit_count as f64).max(1.0));
-            
-            // 3. TOTAL REWARD = Order * Novelty
-            // "I like stability, but I REALLY like STABLE NEW PLACES."
-            let effective_reward = base_reward * novelty_multiplier;
+            if let Some(predicted_state) = self.world_model.get(&prediction_key) {
+                let error = self.dist(*predicted_state, *current_state);
+                // If error is high, we are surprised! Reward this.
+                // We cap it to prevent infinite loops of chaos.
+                surprise = (error * 5.0).min(50.0); 
+            } else {
+                // First time trying this? Moderate curiosity boost.
+                surprise = 5.0;
+            }
 
-            // 4. LEARN (Update Brain)
+            // 3. UPDATE WORLD MODEL (Learn Physics)
+            // "Next time I am in [LastState] and do [Action], I expect [CurrentState]"
+            // Use a simple moving average to smooth out noise (Learning Rate 0.5)
+            let new_prediction = if let Some(prev) = self.world_model.get(&prediction_key) {
+                [
+                    0.5 * prev[0] + 0.5 * current_state[0],
+                    0.5 * prev[1] + 0.5 * current_state[1],
+                    0.5 * prev[2] + 0.5 * current_state[2]
+                ]
+            } else {
+                *current_state
+            };
+            self.world_model.insert(prediction_key, new_prediction);
+
+            // 4. TOTAL REWARD = Stability (Base) + Curiosity (Surprise)
+            let total_reward = base_reward + surprise;
+
+            // 5. LEARN (Update Q-Table)
             let max_future_q = self.get_max_q(&current_state_key);
             let action_values = self.q_table.entry(self.last_state_key.clone()).or_default();
             let current_q = action_values.entry(self.last_action).or_insert(0.0);
             
-            // Q-Learning Equation
-            *current_q += self.alpha * (effective_reward + self.gamma * max_future_q - *current_q);
+            *current_q += self.alpha * (total_reward + self.gamma * max_future_q - *current_q);
 
-            // 5. DECIDE ACTION (Epsilon-Greedy)
+            // 6. DECIDE ACTION (Epsilon-Greedy)
             let action = if Math::random() < self.epsilon {
-                // Explore
                 match (Math::random() * 7.0) as u8 {
                     0 => DiscreteAction::KickXPos, 1 => DiscreteAction::KickXNeg,
                     2 => DiscreteAction::KickYPos, 3 => DiscreteAction::KickYNeg,
@@ -139,7 +170,6 @@ impl Experimenter for QLearningAgent {
                     _ => DiscreteAction::Noop,
                 }
             } else {
-                // Exploit
                 let values = self.q_table.entry(current_state_key.clone()).or_default();
                 values.iter()
                     .max_by(|a, b| a.1.partial_cmp(b.1).unwrap_or(std::cmp::Ordering::Equal))
@@ -147,25 +177,20 @@ impl Experimenter for QLearningAgent {
                     .unwrap_or(DiscreteAction::Noop)
             };
 
+            // 7. LOGGING & MEMORY
             self.last_state_key = current_state_key;
+            self.last_state_vec = *current_state;
             self.last_action = action;
             
-            // Decay exploration
             if self.epsilon > 0.05 { self.epsilon *= 0.995; }
 
-            // 6. REPORT FINDINGS
-            // If we found a highly rewarding state (Order) that is also Rare (Novelty)
-            if effective_reward > 50.0 && step % 60 == 0 {
+            // Generate insights based on Surprise, not just random text
+            if surprise > 25.0 && step % 60 == 0 {
                  discovery = Some(DiscoveryEvent::Insight {
-                     topic: "Pattern Discovered".into(),
-                     content: format!("Found a highly ordered region! Base Reward: {:.1}, Novelty Mult: {:.1}x", base_reward, novelty_multiplier)
+                     topic: "Anomaly Detected".into(),
+                     content: format!("Physics violation? Predicted vs Actual error: {:.2}. Reward spike!", surprise/5.0)
                  });
             } 
-            else if step % 120 == 0 {
-                discovery = Some(DiscoveryEvent::Text(
-                    format!("Analysis: Explored {} regions. Current focus: Stability.", self.visit_counts.len())
-                ));
-            }
 
             return (self.map_action(action), discovery);
         }
@@ -174,7 +199,7 @@ impl Experimenter for QLearningAgent {
     }
 }
 
-// --- DUMMY GARDENER ---
+// ... (GardenerAgent, MockExperimenter, Factory - Keep same) ...
 pub struct GardenerAgent;
 impl GardenerAgent { pub fn new() -> Self { Self } }
 impl Experimenter for GardenerAgent {
@@ -183,7 +208,6 @@ impl Experimenter for GardenerAgent {
     }
 }
 
-// --- MOCK ---
 pub struct MockExperimenter;
 impl MockExperimenter { pub fn new() -> Self { Self } }
 impl Experimenter for MockExperimenter {
@@ -192,7 +216,6 @@ impl Experimenter for MockExperimenter {
     }
 }
 
-// --- FACTORY ---
 pub enum BrainType {
     QLearner,
     Gardener,
