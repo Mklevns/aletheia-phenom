@@ -9,8 +9,6 @@ leptos_meta = { version = "0.6", features = ["csr"] }
 leptos_router = { version = "0.6", features = ["csr"] }
 console_error_panic_hook = "0.1"
 wasm-bindgen = "0.2"
-
-# --- NEW DEPENDENCIES FOR CANVAS ---
 js-sys = "0.3"
 web-sys = { version = "0.3", features = [
     "CanvasRenderingContext2d",
@@ -19,4 +17,4 @@ web-sys = { version = "0.3", features = [
 
 # --- Our Workspace Crates ---
 sim_engine = { path = "../sim_engine" }
-# inference_engine = { path = "../inference_engine" } # We'll add this later
+inference_engine = { path = "../inference_engine" }
