@@ -42,7 +42,8 @@ pub fn App() -> impl IntoView {
         let active_session = active_session.clone();
         move |_| {
             let sim = Box::new(ODESim::new());
-            let agent = Box::new(MockExperimenter::new()); 
+            // Connect the "Curious Scientist" brain
+            let agent = create_brain(BrainType::QLearner); 
             active_session.set(Some(Session::new(sim, agent)));
             set_sim_type.set("ode");
             tick_count.set(0);
