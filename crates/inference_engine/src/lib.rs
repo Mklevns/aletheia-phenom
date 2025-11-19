@@ -4,13 +4,17 @@ use serde::{Deserialize, Serialize};
 pub enum DiscoveryEvent {
     Text(String),
     ObjectDetection { label: String, confidence: f32 },
+    // New: The scientist can publish a hypothesis or insight
+    Insight { topic: String, content: String }, 
 }
 
-// --- Local Types mirroring sim_engine (for decoupling) ---
+// --- Local Types mirroring sim_engine ---
 #[derive(Debug, Clone)]
 pub enum AgentAction {
     FlipCell { r: usize, c: usize },
     Perturb { which: u8, delta: f64 },
+    // NEW: Allow the scientist to change simulation constants
+    SetParam { name: String, val: f64 }, 
     Noop,
 }
 
@@ -21,12 +25,13 @@ pub enum AgentObservation {
     None,
 }
 
-/// An Experimenter is an agent that chooses actions.
+/// An Experimenter is an agent that chooses actions AND can publish findings.
 pub trait Experimenter {
-    fn act(&mut self, obs: &AgentObservation, step: u64) -> AgentAction;
+    // Now returns a tuple: (The Action, An Optional Discovery/Log)
+    fn act(&mut self, obs: &AgentObservation, step: u64) -> (AgentAction, Option<DiscoveryEvent>);
 }
 
-/// A simple random/heuristic experimenter.
+// --- UPDATED MOCK SCIENTIST ---
 pub struct MockExperimenter {
     rng_seed: u64,
 }
@@ -36,10 +41,10 @@ impl MockExperimenter {
 }
 
 impl Experimenter for MockExperimenter {
-    fn act(&mut self, obs: &AgentObservation, step: u64) -> AgentAction {
-        match obs {
+    fn act(&mut self, obs: &AgentObservation, step: u64) -> (AgentAction, Option<DiscoveryEvent>) {
+        // 1. Decide on Action
+        let action = match obs {
             AgentObservation::GridSummary { width, height } => {
-                // Every 60 ticks, flip a cell in the center
                 if step % 60 == 0 {
                     AgentAction::FlipCell { r: height/2, c: width/2 }
                 } else {
@@ -47,7 +52,6 @@ impl Experimenter for MockExperimenter {
                 }
             }
             AgentObservation::StateVec(_v) => {
-                // Every 30 ticks, kick the X variable
                 if step % 30 == 0 {
                     AgentAction::Perturb { which: 0, delta: 2.0 }
                 } else {
@@ -55,11 +59,17 @@ impl Experimenter for MockExperimenter {
                 }
             }
             _ => AgentAction::Noop,
-        }
+        };
+
+        // 2. Decide on Analysis (Mocking a "realization")
+        let discovery = if step > 0 && step % 120 == 0 {
+            Some(DiscoveryEvent::Text(format!("Scientist: Tick {} shows interesting stability.", step)))
+        } else {
+            None
+        };
+
+        (action, discovery)
     }
 }
 
-pub fn get_mock_inference(tick: u64) -> Option<DiscoveryEvent> {
-    if tick == 0 || tick % 120 != 0 { return None; }
-    Some(DiscoveryEvent::Text(format!("Agent analyzing... (Tick: {})", tick)))
-}
+// Remove `get_mock_inference` as it is now obsolete (the agent handles it).
